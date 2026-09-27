@@ -1,0 +1,72 @@
+<?php
+class Mset extends Ci_model{
+
+
+    function acuan($id)
+    {
+      $hsl=$this->db->query("SELECT * FROM tpp_master WHERE id_tpp='$id'");
+      if($hsl->num_rows()>0){
+        foreach ($hsl->result() as $data) {
+          $hasil=array(
+            'id_tpp' => $data->id_tpp,
+            'apel_masuk' => $data->apel_masuk,
+            'bulan' => $data->bulan,
+            'hari_biasa' => $data->hari_biasa,
+            'hari_jumat' => $data->hari_jumat,
+            'hari_kerja' => $data->hari_kerja,
+            'hari_besar' => $data->hari_besar,
+            'tahun' => $data->tahun,
+            'upacara_hari_senin' => $data->upacara_hari_senin,
+            );
+        }
+      }
+      return $hasil;
+    }
+
+    function data(){
+  		$hasil=$this->db->query("SELECT * FROM tpp_master order by bulan ASC");
+  		return $hasil->result();
+  	}
+
+    function tahun(){
+  		$hasil=$this->db->query("SELECT * FROM ref_tahun");
+  		return $hasil->result();
+  	}
+
+    function simpan($a,$b,$c,$d,$e,$f,$hb,$hj){
+      $thb=$hb*27600;
+      $thj=$hj*24000;
+      $td=$thb+$thj;
+
+  		$hasil=$this->db->query("INSERT INTO tpp_master VALUES('','$a','$b','$c','$d','$e','$f','$hb','$hj','$td')");
+  		return $hasil;
+  	}
+
+    function ubah($a,$b,$c,$d,$e,$f,$g,$hb,$hj){
+      $thb=$hb*27600;
+      $thj=$hj*24000;
+      $td=$thb+$thj;
+  		$hasil=$this->db->query("UPDATE tpp_master set
+        tahun = '$a',
+        bulan = '$b',
+        hari_kerja = '$c',
+        hari_biasa=$hb,
+        hari_jumat=$hj,
+        total_detik=$td,
+        upacara_hari_senin = '$d',
+        apel_masuk = '$e',
+        hari_besar = '$f'
+        where id_tpp='$g'
+      ");
+  		return $hasil;
+  	}
+
+    function hapus($id){
+      $hasil=$this->db->query("delete from tpp_master where id_tpp = '$id'");
+      return $hasil;
+    }
+
+
+
+
+}
