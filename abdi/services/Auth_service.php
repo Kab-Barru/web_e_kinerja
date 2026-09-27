@@ -3,7 +3,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
  * Authentication & Profile Service
- * Handles authentication logic, JWT generation, and profile formatting.
+ * Handles NIP verification (passwordless with API Key) and profile formatting.
  */
 class Auth_service
 {
@@ -17,54 +17,55 @@ class Auth_service
     }
 
     /**
-     * Process user login and issue JWT token
+     * Process NIP verification and return user profile details
      *
-     * @param string $username
-     * @param string $password
+     * @param string $nip NIP Pegawai 18 digit
      * @return array
      * @throws Exception
      */
-    public function login($username, $password)
+    public function verify_nip($nip)
     {
-        if (empty($username) || empty($password)) {
-            throw new Exception('Username dan password wajib diisi.', 422);
+        if (empty($nip)) {
+            throw new Exception('NIP pegawai wajib disertakan.', 422);
         }
 
-        $user = $this->CI->pegawai_model->authenticate($username, $password);
+        $profile = $this->CI->pegawai_model->get_profile_by_nik($nip);
 
-        if (!$user) {
-            throw new Exception('Kombinasi NIP / Username dan password tidak sesuai atau akun nonaktif.', 401);
+        if (!$profile) {
+            throw new Exception("Pegawai dengan NIP '$nip' tidak ditemukan dalam sistem ref_pegawai.", 404);
         }
 
-        $profile = $this->CI->pegawai_model->get_profile_by_nik($user->username);
-
-        $token_claims = [
-            'sub'           => $user->username,
-            'nik'           => $user->username,
-            'nama'          => $profile ? $profile->nama : $user->nama_adm,
-            'lev'           => $user->lev,
-            'id_unit_kerja' => $user->id_unit_kerja,
-            'id_adm'        => $user->id_adm,
-            'nik_atasan'    => $profile ? $profile->nik_atasan : null
-        ];
-
-        $token = $this->CI->jwt->generate_token($token_claims);
+        $log_user = $this->CI->pegawai_model->get_log_account($nip);
+        $role = ($log_user && !empty($log_user->lev)) ? $log_user->lev : 'user_pegawai';
 
         return [
-            'token'     => $token,
-            'token_type'=> 'Bearer',
-            'expires_in'=> (int)$this->CI->config->item('jwt_ttl', 'jwt'),
-            'role'      => $user->lev,
-            'pegawai'   => [
-                'nik'           => $user->username,
-                'nama'          => $profile ? $profile->nama : $user->nama_adm,
-                'id_unit_kerja' => $user->id_unit_kerja,
-                'unit_kerja'    => $profile ? $profile->unit_kerja : null,
-                'id_jabatan'    => $profile ? $profile->id_jabatan : null,
-                'jabatan'       => $profile ? $profile->jabatan : null,
-                'nik_atasan'    => $profile ? $profile->nik_atasan : null,
-            ]
+            'authenticated' => true,
+            'role'          => $role,
+            'pegawai'       => [
+                'nik'           => $profile->nik,
+                'nama'          => $profile->nama,
+                'id_unit_kerja' => (int)$profile->id_unit_kerja,
+                'unit_kerja'    => $profile->unit_kerja,
+                'kode_unit_kerja' => $profile->kode_unit_kerja,
+                'id_jabatan'    => (int)$profile->id_jabatan,
+                'jabatan'       => $profile->jabatan,
+                'nik_atasan'    => $profile->nik_atasan,
+            ],
+            'status_atasan_valid' => (!empty($profile->nik_atasan) && $profile->nik_atasan !== '0')
         ];
+    }
+
+    /**
+     * Legacy login method supporting passwordless verification
+     *
+     * @param string $username NIP
+     * @param string|null $password (Optional)
+     * @return array
+     * @throws Exception
+     */
+    public function login($username, $password = null)
+    {
+        return $this->verify_nip($username);
     }
 
     /**
@@ -95,9 +96,13 @@ class Auth_service
             }
         }
 
+        $log_user = $this->CI->pegawai_model->get_log_account($nik);
+        $role = ($log_user && !empty($log_user->lev)) ? $log_user->lev : 'user_pegawai';
+
         return [
             'nik'           => $profile->nik,
             'nama'          => $profile->nama,
+            'role'          => $role,
             'unit_kerja'    => [
                 'id_unit_kerja' => (int)$profile->id_unit_kerja,
                 'nama'          => $profile->unit_kerja,

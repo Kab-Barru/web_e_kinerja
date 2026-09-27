@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "E-Kinerja Kabupaten Barru RESTful API",
-    "description": "Spesifikasi RESTful API resmi Sistem Informasi E-Kinerja Pemerintah Kabupaten Barru untuk integrasi Frontend, Mobile, dan AI Agent.",
-    "version": "1.0.0",
+    "description": "Spesifikasi RESTful API resmi Sistem Informasi E-Kinerja Pemerintah Kabupaten Barru dengan mekanisme autentikasi langsung API Key (X-API-KEY) dan NIP Pegawai (X-USER-NIP) tanpa password.",
+    "version": "1.1.0",
     "contact": {
       "name": "BKPSDM Pemerintah Kabupaten Barru",
       "url": "https://e-kinerja.barrukab.go.id"
@@ -21,16 +21,23 @@
   ],
   "security": [
     {
-      "BearerAuth": []
+      "ApiKeyAuth": [],
+      "UserNipAuth": []
     }
   ],
   "components": {
     "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "Kirimkan JWT Token dalam format header 'Authorization: Bearer <token>'"
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-KEY",
+        "description": "API Key rahasia klien (contoh: barru_ekinerja_api_key_2026_secret_mobile)"
+      },
+      "UserNipAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-USER-NIP",
+        "description": "NIP 18 digit pegawai yang sedang aktif melakukan transaksi"
       }
     },
     "schemas": {
@@ -63,12 +70,11 @@
           "has_prev": { "type": "boolean", "example": false }
         }
       },
-      "LoginRequest": {
+      "VerifyNipRequest": {
         "type": "object",
-        "required": ["username", "password"],
+        "required": ["nip"],
         "properties": {
-          "username": { "type": "string", "example": "198801012015011001", "description": "NIP Pegawai" },
-          "password": { "type": "string", "example": "password123", "description": "Password Akun" }
+          "nip": { "type": "string", "example": "198801012015011001", "description": "NIP Pegawai 18 digit" }
         }
       },
       "CreateReportRequest": {
@@ -118,29 +124,31 @@
   "paths": {
     "/auth/login": {
       "post": {
-        "summary": "Login Pengguna & Dapatkan Bearer Token JWT",
-        "security": [],
+        "summary": "Verifikasi NIP Pegawai (Passwordless via API Key)",
+        "security": [
+          { "ApiKeyAuth": [] }
+        ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+              "schema": { "$ref": "#/components/schemas/VerifyNipRequest" }
             }
           }
         },
         "responses": {
-          "200": { "description": "Login berhasil, mengembalikan token JWT dan profil singkat" },
-          "401": { "description": "Kombinasi NIP / password salah" },
-          "422": { "description": "Parameter tidak lengkap" }
+          "200": { "description": "Verifikasi NIP berhasil, mengembalikan profil dan status akun" },
+          "401": { "description": "API Key tidak valid" },
+          "404": { "description": "NIP pegawai tidak ditemukan" }
         }
       }
     },
     "/profile": {
       "get": {
-        "summary": "Ambil Profil Lengkap Pengguna yang Sedang Login",
+        "summary": "Ambil Profil Lengkap Pegawai yang Dikirimkan via Header X-USER-NIP",
         "responses": {
           "200": { "description": "Profil pegawai, unit kerja, jabatan, dan atasan langsung" },
-          "401": { "description": "Token tidak valid atau kedaluwarsa" }
+          "401": { "description": "Header X-API-KEY atau X-USER-NIP tidak valid" }
         }
       }
     },
@@ -276,7 +284,7 @@
     },
     "/approval/bawahan": {
       "get": {
-        "summary": "Daftar Bawahan Langsung dari Atasan yang Sedang Login",
+        "summary": "Daftar Bawahan Langsung dari Atasan (NIP Dikirim via Header X-USER-NIP)",
         "responses": {
           "200": { "description": "Daftar NIP, nama, jabatan, unit kerja bawahan" }
         }

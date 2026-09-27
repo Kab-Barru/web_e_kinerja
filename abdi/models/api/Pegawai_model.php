@@ -33,6 +33,23 @@ class Pegawai_model extends CI_Model
     }
 
     /**
+     * Get user log account by username/NIP (without password check)
+     *
+     * @param string $username NIP/NIK
+     * @return object|null
+     */
+    public function get_log_account($username)
+    {
+        $this->db->select('id_adm, nama_adm, username, lev, id_unit_kerja, active');
+        $this->db->from('ref_log');
+        $this->db->where('username', (string)$username);
+        $this->db->limit(1);
+
+        $query = $this->db->get();
+        return $query->row();
+    }
+
+    /**
      * Get detailed pegawai profile with unit kerja and jabatan
      *
      * @param string $nik

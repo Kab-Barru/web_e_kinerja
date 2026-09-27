@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "e-kinerja-barrukab-v1",
-    "name": "E-Kinerja Kabupaten Barru - RESTful API v1",
-    "description": "Koleksi Postman resmi untuk API e-Kinerja Kabupaten Barru.",
+    "name": "E-Kinerja Kabupaten Barru - RESTful API v1 (API Key & NIP Auth)",
+    "description": "Koleksi Postman resmi untuk API e-Kinerja Kabupaten Barru menggunakan autentikasi Header X-API-KEY dan X-USER-NIP.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,8 +12,13 @@
       "type": "string"
     },
     {
-      "key": "bearer_token",
-      "value": "",
+      "key": "api_key",
+      "value": "barru_ekinerja_api_key_2026_secret_mobile",
+      "type": "string"
+    },
+    {
+      "key": "user_nip",
+      "value": "198801012015011001",
       "type": "string"
     },
     {
@@ -32,30 +37,16 @@
       "name": "1. Autentikasi & Akun",
       "item": [
         {
-          "name": "POST Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
-                  "    pm.collectionVariables.set('bearer_token', jsonData.data.token);",
-                  "    console.log('Bearer token saved to collection variable');",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "POST Verifikasi NIP Pegawai",
           "request": {
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"198801012015011001\",\n  \"password\": \"123456\"\n}"
+              "raw": "{\n  \"nip\": \"{{user_nip}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
@@ -65,13 +56,13 @@
           }
         },
         {
-          "name": "GET Profile",
+          "name": "GET Profile Pegawai",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/profile",
               "host": ["{{base_url}}"],
@@ -87,11 +78,11 @@
         {
           "name": "GET Daftar Kinerja",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/kinerja?bulan=9&tahun=2026&page=1&per_page=15",
               "host": ["{{base_url}}"],
@@ -122,12 +113,10 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -144,11 +133,11 @@
         {
           "name": "GET Detail Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/kinerja/{{id_pro_lap}}",
               "host": ["{{base_url}}"],
@@ -159,12 +148,10 @@
         {
           "name": "PUT Ubah Header Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "PUT",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -181,11 +168,11 @@
         {
           "name": "DELETE Hapus Draft Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "DELETE",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/kinerja/{{id_pro_lap}}",
               "host": ["{{base_url}}"],
@@ -210,12 +197,10 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -232,12 +217,10 @@
         {
           "name": "PUT Ubah Item Kegiatan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "PUT",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -254,11 +237,11 @@
         {
           "name": "DELETE Hapus Item Kegiatan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "DELETE",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/kinerja/items/{{id_pro_lap_detil}}",
               "host": ["{{base_url}}"],
@@ -269,11 +252,11 @@
         {
           "name": "POST Submit Laporan ke Atasan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/kinerja/{{id_pro_lap}}/submit",
               "host": ["{{base_url}}"],
@@ -289,11 +272,11 @@
         {
           "name": "GET Daftar Bawahan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/approval/bawahan",
               "host": ["{{base_url}}"],
@@ -304,11 +287,11 @@
         {
           "name": "GET Laporan Pending",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/approval/pending?page=1&per_page=15",
               "host": ["{{base_url}}"],
@@ -323,11 +306,11 @@
         {
           "name": "GET Review Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/approval/{{id_pro_lap}}/review",
               "host": ["{{base_url}}"],
@@ -338,12 +321,10 @@
         {
           "name": "POST Setujui Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -360,12 +341,10 @@
         {
           "name": "POST Revisi Laporan",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -387,11 +366,11 @@
         {
           "name": "GET Skor Penilaian",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "GET",
+            "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" }
+            ],
             "url": {
               "raw": "{{base_url}}/master/skor-penilaian",
               "host": ["{{base_url}}"],
@@ -402,17 +381,15 @@
         {
           "name": "POST Sinkronisasi Fingerprint",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
-            },
             "method": "POST",
             "header": [
+              { "key": "X-API-KEY", "value": "{{api_key}}" },
+              { "key": "X-USER-NIP", "value": "{{user_nip}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nik\": \"198801012015011001\",\n  \"tanggal\": \"2026-09-27\"\n}"
+              "raw": "{\n  \"nik\": \"{{user_nip}}\",\n  \"tanggal\": \"2026-09-27\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/integrasi/fingerprint/sync-daily",

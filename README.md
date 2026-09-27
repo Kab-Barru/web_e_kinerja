@@ -2,12 +2,13 @@
 
 Sistem Informasi E-Kinerja adalah platform manajemen kinerja aparatur sipil negara (ASN) di lingkungan Pemerintah Kabupaten Barru. Sistem ini dirancang untuk mencatat aktivitas kerja harian, mengintegrasikan data presensi mesin fingerprint, memfasilitasi verifikasi bertingkat oleh atasan langsung, serta mengakumulasi skor kinerja bulanan sebagai dasar perhitungan Tambahan Penghasilan Pegawai (TPP).
 
-Aplikasi ini kini telah dilengkapi dengan modul **RESTful API v1** yang siap diintegrasikan secara mulus dengan aplikasi mobile (Android/iOS), frontend modern, maupun sistem kepegawaian eksternal seperti SIASN BKN dan SIMPEG.
+Aplikasi ini kini telah dilengkapi dengan modul **RESTful API v1** yang siap diintegrasikan secara langsung dengan aplikasi mobile (Android/iOS), frontend modern, maupun sistem kepegawaian eksternal seperti SIASN BKN dan SIMPEG.
 
 ---
 
 ## Daftar Isi
 - [Fitur Utama](#fitur-utama)
+- [Mekanisme Autentikasi (API Key & NIP)](#mekanisme-autentikasi-api-key--nip)
 - [Arsitektur & Teknologi](#arsitektur--teknologi)
 - [Alur Kerja Laporan (State Machine)](#alur-kerja-laporan-state-machine)
 - [Modul RESTful API v1](#modul-restful-api-v1)
@@ -38,11 +39,26 @@ Aplikasi ini kini telah dilengkapi dengan modul **RESTful API v1** yang siap dii
 4. **Integrasi Presensi Fingerprint**
    - Sinkronisasi otomatis jam masuk dan jam pulang kantor dari database presensi ke dalam rincian kegiatan laporan harian secara aman (*graceful fallback*).
 
-5. **Modul RESTful API v1 Modern**
-   - Autentikasi stateless menggunakan **Bearer JWT Token** (HS256).
+5. **Modul RESTful API v1 Tanpa Password (Passwordless)**
+   - Autentikasi langsung berbasis **Header `X-API-KEY` & `X-USER-NIP`** pada setiap request.
    - Format respons JSON seragam (*Standard Response Envelope*).
    - Arsitektur berlapis: Controller, Service Layer (logika bisnis & transaksi), dan Model/Repository (query database teroptimasi).
    - Berjalan harmonis berdampingan dengan portal web eksisting tanpa risiko konflik sesi ataupun perubahan skema database (*zero breaking changes*).
+
+---
+
+## Mekanisme Autentikasi (API Key & NIP)
+
+Untuk kemudahan dan kecepatan integrasi aplikasi mobile maupun AI Agent, API ini menggunakan skema autentikasi **stateless direct-header** tanpa perlu menginput kata sandi:
+
+```http
+X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile
+X-USER-NIP: 198801012015011001
+Content-Type: application/json
+```
+
+* **`X-API-KEY`**: Kunci rahasia API yang diberikan kepada aplikasi klien (didaftarkan di `abdi/config/api_key.php`).
+* **`X-USER-NIP`**: NIP 18 digit pegawai yang sedang aktif bertindak. Backend secara otomatis memverifikasi profil di database dan menetapkan hak akses / role pegawai yang sesuai.
 
 ---
 
@@ -50,7 +66,7 @@ Aplikasi ini kini telah dilengkapi dengan modul **RESTful API v1** yang siap dii
 
 * **Backend Framework**: [CodeIgniter 3](https://codeigniter.com/) (PHP 7.4 - 8.3 compatible)
 * **Database**: MySQL / MariaDB (Database utama: `bkpsdm_yusran`, Database absensi: `absensi`)
-* **Autentikasi API**: JSON Web Token (JWT) native implementation (HS256)
+* **Autentikasi API**: API Key & NIP Header Authentication (dengan fallback Bearer JWT)
 * **Spesifikasi API**: OpenAPI 3.0.3 (Swagger) & Postman Collection v2.1
 * **Web Server**: Apache dengan modul `mod_rewrite` aktif
 
@@ -102,7 +118,7 @@ Format Base URL: `https://e-kinerja.barrukab.go.id/api/v1`
 
 | Modul | Method | Endpoint | Deskripsi |
 | :--- | :---: | :--- | :--- |
-| **Autentikasi** | `POST` | `/auth/login` | Login menggunakan NIP & password, menghasilkan Bearer Token JWT. |
+| **Autentikasi** | `POST` | `/auth/login` | Verifikasi status keaktifan NIP pegawai menggunakan API Key (passwordless). |
 | | `GET` | `/profile` | Mengambil profil lengkap pegawai, unit kerja, dan atasan langsung. |
 | **Kinerja Pegawai** | `GET` | `/kinerja` | Riwayat laporan bulanan pegawai dengan pagination & filter. |
 | | `POST` | `/kinerja` | Membuat draft laporan harian baru. |
@@ -158,9 +174,10 @@ Seluruh respons API dibungkus dalam format standar seragam:
 e-kinerja/
 ├── abdi/                               # Direktori Aplikasi Utama (CodeIgniter 3)
 │   ├── config/
+│   │   ├── api_key.php                 # Konfigurasi daftar API Key klien
 │   │   ├── config.php                  # Konfigurasi umum CodeIgniter
 │   │   ├── database.php                # Konfigurasi koneksi MySQL
-│   │   ├── jwt.php                     # Konfigurasi rahasia & masa aktif JWT
+│   │   ├── jwt.php                     # Konfigurasi JWT (kompatibilitas)
 │   │   └── routes.php                  # Pemetaan route RESTful API v1
 │   ├── controllers/
 │   │   ├── api/v1/                     # Controller RESTful API v1
@@ -172,17 +189,17 @@ e-kinerja/
 │   │   ├── admin/                      # Controller modul web admin OPD
 │   │   └── su/                         # Controller modul super admin BKPSDM
 │   ├── core/
-│   │   └── MY_Controller.php           # Base API Controller (CORS, JWT, Envelopes)
+│   │   └── MY_Controller.php           # Base API Controller (CORS, API Key, Envelopes)
 │   ├── libraries/
 │   │   └── JWT.php                     # Library native HS256 encoder/decoder
 │   ├── models/
 │   │   └── api/                        # Model/Repository query teroptimasi API
-│   │       ├── Pegawai_model.php       # Query pegawai & autentikasi
+│   │       ├── Pegawai_model.php       # Query pegawai & akun log
 │   │       ├── Kinerja_model.php       # Query header & detil laporan
 │   │       ├── Approval_model.php      # Query evaluasi atasan & izin
 │   │       └── Master_model.php        # Query master skor & absen finger
 │   ├── services/                       # Service Layer (Business Invariants & TX)
-│   │   ├── Auth_service.php            # Logika bisnis autentikasi & profil
+│   │   ├── Auth_service.php            # Logika bisnis autentikasi NIP & profil
 │   │   ├── Kinerja_service.php         # Validasi tanggal, duplikasi, & submit
 │   │   ├── Approval_service.php        # Toleransi kepatuhan waktu & putusan
 │   │   └── Master_service.php          # Integrasi presensi harian
@@ -226,15 +243,16 @@ $db['default'] = array(
 );
 ```
 
-### 4. Konfigurasi Kunci Rahasia JWT
-Buka berkas `abdi/config/jwt.php` untuk menyesuaikan kunci enkripsi token JWT:
+### 4. Konfigurasi Kunci API (API Key)
+Buka berkas `abdi/config/api_key.php` untuk mengatur kunci API resmi klien mobile / integrasi:
 ```php
-$config['jwt_secret_key'] = 'ganti_dengan_kunci_rahasia_yang_sangat_kuat_2026';
-$config['jwt_ttl']        = 86400 * 7; // Masa aktif token (contoh: 7 hari)
+$config['api_keys'] = [
+    'kunci_api_rahasia_anda_disini_2026',
+];
 ```
 
 ### 5. Konfigurasi Apache Header Authorization
-Pastikan server Apache meneruskan header `Authorization` ke PHP dengan memastikan baris berikut ada di `.htaccess`:
+Pastikan server Apache meneruskan custom headers ke PHP dengan memastikan baris berikut ada di `.htaccess`:
 ```apache
 RewriteEngine On
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -247,10 +265,10 @@ RewriteRule ^(.*)$ index.php/$1 [L]
 
 ## Dokumentasi API & Integrasi
 
-Untuk memudahkan pengembang frontend, mobile app, maupun AI coding assistant dalam mengintegrasikan endpoint, tersedia beberapa dokumen pendukung di dalam folder `docs/api/`:
+Tersedia dokumen panduan lengkap di folder `docs/api/`:
 
 * **Panduan AI Agent & Mobile**: Baca [AI_AGENT_API_GUIDE.md](docs/api/AI_AGENT_API_GUIDE.md) untuk detail alur state machine, aturan invariant, skenario error handling, dan deklarasi Function Calling schema.
-* **Koleksi Postman**: Impor berkas [ekinerja_api_postman_collection.json](docs/api/ekinerja_api_postman_collection.json) ke aplikasi Postman. Koleksi ini sudah dilengkapi otomatisasi penyimpanan token JWT ke *environment variables*.
+* **Koleksi Postman**: Impor berkas [ekinerja_api_postman_collection.json](docs/api/ekinerja_api_postman_collection.json) ke aplikasi Postman. Koleksi ini sudah diset menggunakan header `X-API-KEY` dan `X-USER-NIP`.
 * **Swagger / OpenAPI**: Berkas [openapi.yaml](docs/api/openapi.yaml) dan [openapi.json](docs/api/openapi.json) dapat langsung diunggah ke [Swagger Editor](https://editor.swagger.io/) untuk menghasilkan antarmuka uji interaktif atau membuat client SDK otomatis.
 
 ---

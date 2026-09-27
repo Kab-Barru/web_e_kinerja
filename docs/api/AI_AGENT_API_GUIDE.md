@@ -4,18 +4,29 @@
 > **Target Pembaca**: AI Coding Agent (Cursor, Claude, Copilot, Antigravity) & Frontend/Mobile Developer (Flutter, React Native, Next.js).  
 > **Versi API**: `v1`  
 > **Base URL**: `https://e-kinerja.barrukab.go.id/api/v1`  
-> **Karakter Respons**: JSON Envelope Konsisten, Zero Unbounded Query, JWT Bearer Auth.
+> **Skema Autentikasi**: **API Key + NIP Header Langsung** (`X-API-KEY` & `X-USER-NIP`), Passwordless, JSON Envelope Konsisten, Zero Unbounded Query.
 
 ---
 
-## 1. SISTEM DAN KONSEP DASAR (SYSTEM CONTEXT & ROLES)
+## 1. MEKANISME AUTENTIKASI (API KEY & NIP DIRECT HEADER)
 
-Sistem Informasi E-Kinerja Pemerintah Kabupaten Barru mengelola pelaporan aktivitas kerja harian ASN, sinkronisasi presensi kehadiran (fingerprint), proses evaluasi berjenjang oleh atasan langsung, dan akumulasi kinerja untuk perhitungan Tambahan Penghasilan Pegawai (TPP).
+Sistem menggunakan mekanisme autentikasi tanpa password (*passwordless*) yang cepat, aman, dan langsung (*stateless*). Setiap pemanggilan request HTTP dari aplikasi mobile, frontend, atau AI Agent **WAJIB menyertakan 2 Header Utama**:
 
-### Peran Pengguna (Roles):
-- `user_pegawai`: Pegawai pelapor. Dapat membuat draft laporan harian, menambahkan rincian kegiatan kerja, dan mengajukan (submit) laporan kepada atasan langsung.
-- `user_admin`: Administrator OPD. Mengelola kepegawaian internal unit kerja.
-- `user_su`: Super Administrator BKPSDM. Akses monitoring lintas instansi.
+```http
+X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile
+X-USER-NIP: 198801012015011001
+Content-Type: application/json
+```
+
+### Cara Kerja Autentikasi Backend:
+1. **Verifikasi Kunci API (`X-API-KEY`)**:
+   Backend mencocokkan nilai header dengan daftar kunci resmi yang terdaftar di konfigurasi sistem (`abdi/config/api_key.php`). Jika tidak cocok/kosong, server mengembalikan error `401 Unauthorized`.
+2. **Identifikasi & Resolusi Pegawai (`X-USER-NIP`)**:
+   Backend secara otomatis memvalidasi data pegawai di tabel `ref_pegawai` dan mengecek hak akses/role di `ref_log`. Jika NIP terdaftar, identitas (`nik`, `nama`, `id_unit_kerja`, `id_jabatan`, `nik_atasan`, dan `role`) langsung aktif dan terikat pada request tersebut.
+3. **Tanpa Password**:
+   Pengguna ASN tidak perlu lagi mengingat atau memasukkan kata sandi ke aplikasi mobile/frontend. Identitas cukup ditentukan dari NIP yang diautentikasi oleh API Key terpercaya.
+4. **Kompatibilitas Mundur (Fallback JWT)**:
+   Backend tetap menerima header `Authorization: Bearer <token>` jika klien masih menyertakan token sesi.
 
 ---
 
@@ -64,7 +75,7 @@ Setiap laporan harian (`pro_lap`) memiliki status numerik (`0` s/d `3`) dengan a
 AI Agent atau Frontend WAJIB mematuhi dan mengimplementasikan validasi lokal sebelum memanggil endpoint backend:
 
 1. **Prasyarat Atasan Langsung (`nik_atasan`)**:
-   - Pegawai dengan data `nik_atasan = null` atau `nik_atasan = '0'` **dilarang membuat laporan**. Tampilkan modal/peringatan: *"Silakan hubungi administrator untuk memperbarui data atasan langsung terlebih dahulu."*
+   - Pegawai dengan data `nik_atasan = null` atau `nik_atasan = '0'` **dilarang membuat laporan**. Tampilkan peringatan: *"Silakan hubungi administrator untuk memperbarui data atasan langsung terlebih dahulu."*
 2. **Larangan Duplikasi Hari**:
    - 1 NIP pegawai hanya boleh memiliki maksimal 1 header laporan pada tanggal yang sama. Backend akan menolak dengan error `422 Unprocessable Entity` jika tanggal duplikat.
 3. **Immutability Status Approved (`status = 2`)**:
@@ -121,46 +132,50 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 ### Kelompok 1: Autentikasi & Profil Akun
 
-#### 1.1. Login Pegawai / Pengguna
+#### 1.1. Verifikasi NIP Pegawai (Passwordless)
 - **Method & URL**: `POST /auth/login`
-- **Headers**: `Content-Type: application/json`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `Content-Type: application/json`
 - **Request Body**:
   ```json
   {
-    "username": "198801012015011001",
-    "password": "password123"
+    "nip": "198801012015011001"
   }
   ```
+  *(Catatan: NIP juga dapat dikirim langsung via header `X-USER-NIP: 198801012015011001`).*
 - **Response Success (200 OK)**:
   ```json
   {
     "success": true,
-    "message": "Autentikasi berhasil. Selamat datang di e-Kinerja.",
+    "message": "Verifikasi NIP berhasil. Akses API aktif.",
     "data": {
-      "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-      "token_type": "Bearer",
-      "expires_in": 604800,
+      "authenticated": true,
       "role": "user_pegawai",
       "pegawai": {
         "nik": "198801012015011001",
         "nama": "Ahmad Dani, S.STP",
         "id_unit_kerja": 12,
         "unit_kerja": "Badan Kepegawaian dan Pengembangan SDM",
+        "kode_unit_kerja": "0",
         "id_jabatan": 45,
         "jabatan": "Analis SDM Aparatur Ahli Pertama",
         "nik_atasan": "197505121998031002"
-      }
+      },
+      "status_atasan_valid": true
     },
     "meta": null
   }
   ```
 - **Error Responses**:
-  - `401 Unauthorized`: `"Kombinasi NIP / Username dan password tidak sesuai atau akun nonaktif."`
-  - `422 Unprocessable Entity`: `"Username dan password wajib diisi."`
+  - `401 Unauthorized`: `"Akses ditolak. API Key yang disertakan pada header X-API-KEY tidak valid."`
+  - `404 Not Found`: `"Pegawai dengan NIP '1988...' tidak ditemukan dalam sistem ref_pegawai."`
 
 #### 1.2. Ambil Profil Pengguna Aktif
 - **Method & URL**: `GET /profile`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `X-USER-NIP: 198801012015011001`
 - **Response Success (200 OK)**:
   ```json
   {
@@ -169,6 +184,7 @@ Setiap endpoint API mengembalikan payload standar seragam:
     "data": {
       "nik": "198801012015011001",
       "nama": "Ahmad Dani, S.STP",
+      "role": "user_pegawai",
       "unit_kerja": {
         "id_unit_kerja": 12,
         "nama": "Badan Kepegawaian dan Pengembangan SDM",
@@ -196,7 +212,9 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.1. Daftar Riwayat Laporan Kinerja
 - **Method & URL**: `GET /kinerja`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `X-USER-NIP: 198801012015011001`
 - **Query Parameters**:
   - `bulan` (integer 1-12, opsional): Filter bulan laporan.
   - `tahun` (integer YYYY, opsional): Filter tahun laporan.
@@ -241,7 +259,10 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.2. Buat Draft Header Laporan Baru
 - **Method & URL**: `POST /kinerja`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `X-USER-NIP: 198801012015011001`
+  - `Content-Type: application/json`
 - **Request Body**:
   ```json
   {
@@ -280,7 +301,9 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.3. Detail Laporan Kinerja beserta Rincian Kegiatan
 - **Method & URL**: `GET /kinerja/{id_pro_lap}`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `X-USER-NIP: 198801012015011001`
 - **Response Success (200 OK)**:
   ```json
   {
@@ -326,7 +349,7 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.4. Perbarui Keterangan Header Laporan
 - **Method & URL**: `PUT /kinerja/{id_pro_lap}`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Headers**: `X-API-KEY`, `X-USER-NIP`, `Content-Type: application/json`
 - **Syarat**: Hanya boleh dipanggil jika `status` adalah `0` (Draft) atau `3` (Revisi).
 - **Request Body**:
   ```json
@@ -337,13 +360,12 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.5. Hapus Laporan Kinerja
 - **Method & URL**: `DELETE /kinerja/{id_pro_lap}`
-- **Headers**: `Authorization: Bearer <token>`
-- **Syarat**: Hanya diizinkan jika `status` adalah `0` (Draft). Semua rincian kegiatan terkait akan terhapus otomatis (cascade).
+- **Headers**: `X-API-KEY`, `X-USER-NIP`
+- **Syarat**: Hanya diizinkan jika `status` adalah `0` (Draft). Cascade delete seluruh items.
 
 #### 2.6. Tambah Rincian Kegiatan Kerja
 - **Method & URL**: `POST /kinerja/{id_pro_lap}/items`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
-- **Syarat**: Laporan harus berstatus `0` (Draft) atau `3` (Revisi).
+- **Headers**: `X-API-KEY`, `X-USER-NIP`, `Content-Type: application/json`
 - **Request Body**:
   ```json
   {
@@ -353,26 +375,10 @@ Setiap endpoint API mengembalikan payload standar seragam:
     "urutan": 2
   }
   ```
-- **Response Success (201 Created)**:
-  ```json
-  {
-    "success": true,
-    "message": "Rincian kegiatan berhasil ditambahkan.",
-    "data": {
-      "id_pro_lap_detil": 4203,
-      "id_pro_lap": 1052,
-      "urutan": 2,
-      "jam": "09:00 - 11:30",
-      "uraian_tugas": "Mengikuti rapat koordinasi teknis aplikasi e-Kinerja di Aula Kantor Bupati",
-      "output": "1 Berkas Notulen Rapat"
-    },
-    "meta": null
-  }
-  ```
 
 #### 2.7. Ubah Rincian Kegiatan Kerja
 - **Method & URL**: `PUT /kinerja/items/{id_pro_lap_detil}`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Headers**: `X-API-KEY`, `X-USER-NIP`, `Content-Type: application/json`
 - **Request Body**:
   ```json
   {
@@ -385,16 +391,11 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 2.8. Hapus Rincian Kegiatan Kerja
 - **Method & URL**: `DELETE /kinerja/items/{id_pro_lap_detil}`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**: `X-API-KEY`, `X-USER-NIP`
 
 #### 2.9. Ajukan Laporan ke Atasan (Submit)
 - **Method & URL**: `POST /kinerja/{id_pro_lap}/submit`
-- **Headers**: `Authorization: Bearer <token>`
-- **Prasyarat Bisnis**:
-  1. Laporan berstatus `0` (Draft) atau `3` (Revisi).
-  2. Minimal memiliki 1 baris kegiatan pada `items`.
-  3. Mengupdate `status = 1`, `tanggal_kirim = CURDATE()`, dan mengaitkan `nik_atasan` terbaru.
-  4. Mencoba sinkronisasi log finger pulang secara otomatis (graceful non-blocking).
+- **Headers**: `X-API-KEY`, `X-USER-NIP`
 - **Response Success (200 OK)**:
   ```json
   {
@@ -418,7 +419,9 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 3.1. Daftar Bawahan Langsung
 - **Method & URL**: `GET /approval/bawahan`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**:
+  - `X-API-KEY: barru_ekinerja_api_key_2026_secret_mobile`
+  - `X-USER-NIP: 197505121998031002` *(NIP Atasan)*
 - **Response Success (200 OK)**:
   ```json
   {
@@ -439,85 +442,16 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 3.2. Daftar Laporan Menunggu Persetujuan (Pending)
 - **Method & URL**: `GET /approval/pending`
-- **Headers**: `Authorization: Bearer <token>`
+- **Headers**: `X-API-KEY`, `X-USER-NIP: <nip_atasan>`
 - **Query Parameters**: `nik_bawahan`, `bulan`, `tahun`, `page`, `per_page`
-- **Response Success (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "message": "Daftar laporan pending bawahan berhasil dimuat.",
-    "data": [
-      {
-        "id_pro_lap": 1052,
-        "nik": "198801012015011001",
-        "nama_bawahan": "Ahmad Dani, S.STP",
-        "jabatan": "Analis SDM Aparatur Ahli Pertama",
-        "unit_kerja": "Badan Kepegawaian dan Pengembangan SDM",
-        "tanggal": "2026-09-25",
-        "tanggal_kirim": "2026-09-27",
-        "status": 1,
-        "status_label": "Menunggu Verifikasi Atasan",
-        "total_items": 4
-      }
-    ],
-    "meta": {
-      "current_page": 1,
-      "per_page": 15,
-      "total_items": 1,
-      "total_pages": 1,
-      "has_next": false,
-      "has_prev": false
-    }
-  }
-  ```
 
 #### 3.3. Review Komprehensif Laporan Bawahan
 - **Method & URL**: `GET /approval/{id_pro_lap}/review`
-- **Headers**: `Authorization: Bearer <token>`
-- **Response Success (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "message": "Data evaluasi laporan bawahan berhasil dimuat.",
-    "data": {
-      "laporan": {
-        "id_pro_lap": 1052,
-        "nik": "198801012015011001",
-        "nama_bawahan": "Ahmad Dani, S.STP",
-        "jabatan": "Analis SDM Aparatur Ahli Pertama",
-        "unit_kerja": "Badan Kepegawaian dan Pengembangan SDM",
-        "tanggal": "2026-09-25",
-        "tanggal_kirim": "2026-09-27",
-        "status": 1,
-        "status_label": "Menunggu Verifikasi Atasan",
-        "ket": "0",
-        "note": null
-      },
-      "evaluasi_kepatuhan": {
-        "selisih_hari": 2,
-        "hari_laporan": "Fri",
-        "opd_kode": 0,
-        "status_ketepatan": "TEPAT WAKTU",
-        "is_tepat_waktu": true
-      },
-      "catatan_izin": null,
-      "items": [
-        {
-          "id_pro_lap_detil": 4201,
-          "urutan": 1,
-          "jam": "07:30",
-          "uraian_tugas": "Masuk Kantor",
-          "output": "Data Mesin Finger"
-        }
-      ]
-    },
-    "meta": null
-  }
-  ```
+- **Headers**: `X-API-KEY`, `X-USER-NIP: <nip_atasan>`
 
 #### 3.4. Kirim Keputusan Evaluasi Atasan (Setujui / Revisi)
 - **Method & URL**: `POST /approval/{id_pro_lap}/decide`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Headers**: `X-API-KEY`, `X-USER-NIP: <nip_atasan>`, `Content-Type: application/json`
 
 ##### Opsi A: Menyetujui Laporan
 ```json
@@ -527,7 +461,6 @@ Setiap endpoint API mengembalikan payload standar seragam:
   "kesesuaian_lap": 50
 }
 ```
-*Respons Sukses*: Status berubah menjadi `2` (Approved). Laporan terkunci permanen dan dihitung dalam TPP.
 
 ##### Opsi B: Meminta Revisi Laporan
 ```json
@@ -536,7 +469,6 @@ Setiap endpoint API mengembalikan payload standar seragam:
   "note": "Uraian tugas jam 13:00 belum menyertakan berkas laporan pendukung, mohon dilengkapi."
 }
 ```
-*Respons Sukses*: Status berubah menjadi `3` (Revision). Catatan tersimpan dan laporan terbuka kembali untuk diedit bawahan.
 
 ---
 
@@ -544,58 +476,16 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 #### 4.1. Opsi Skor Penilaian Atasan
 - **Method & URL**: `GET /master/skor-penilaian`
-- **Headers**: `Authorization: Bearer <token>`
-- **Response Success (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "message": "Opsi skor penilaian berhasil dimuat.",
-    "data": {
-      "ketepatan_waktu": [
-        { "id_ketepatan": 1, "nilai": 50, "ketepatan": "Sangat Tepat Waktu (50)" },
-        { "id_ketepatan": 2, "nilai": 25, "ketepatan": "Cukup Tepat Waktu (25)" },
-        { "id_ketepatan": 3, "nilai": 0,  "ketepatan": "Terlambat (0)" }
-      ],
-      "kesesuaian_lap": [
-        { "id_kesesuaian": 1, "nilai": 50, "kesesuaian": "Sangat Sesuai Tugas (50)" },
-        { "id_kesesuaian": 2, "nilai": 25, "kesesuaian": "Cukup Sesuai Tugas (25)" },
-        { "id_kesesuaian": 3, "nilai": 0,  "kesesuaian": "Tidak Sesuai (0)" }
-      ]
-    },
-    "meta": null
-  }
-  ```
+- **Headers**: `X-API-KEY`, `X-USER-NIP`
 
 #### 4.2. Sinkronisasi Presensi Fingerprint Harian
 - **Method & URL**: `POST /integrasi/fingerprint/sync-daily`
-- **Headers**: `Authorization: Bearer <token>`, `Content-Type: application/json`
+- **Headers**: `X-API-KEY`, `X-USER-NIP`, `Content-Type: application/json`
 - **Request Body**:
   ```json
   {
     "nik": "198801012015011001",
     "tanggal": "2026-09-27"
-  }
-  ```
-- **Response Success (200 OK)**:
-  ```json
-  {
-    "success": true,
-    "message": "Proses sinkronisasi presensi fingerprint selesai.",
-    "data": {
-      "id_pro_lap": 1052,
-      "nik": "198801012015011001",
-      "tanggal": "2026-09-27",
-      "log_finger": {
-        "jam_masuk": "07:30",
-        "jam_pulang": "16:05"
-      },
-      "item_disinkronkan": [
-        "Masuk Kantor (07:30)",
-        "Pulang Kantor (16:05)"
-      ],
-      "catatan": "Sinkronisasi berhasil: Masuk Kantor (07:30), Pulang Kantor (16:05)"
-    },
-    "meta": null
   }
   ```
 
@@ -605,32 +495,31 @@ Setiap endpoint API mengembalikan payload standar seragam:
 
 | HTTP Code | Error Message Khas | Penyebab Utama | Tindakan Rekomendasi Frontend / Mobile |
 | :---: | :--- | :--- | :--- |
-| `401` | Token otentikasi tidak ditemukan / kedaluwarsa. | Token JWT hilang, salah format, atau masa aktif berakhir. | Arahkan pengguna ke layar Login (`/login`) dan hapus token lama dari LocalStorage / SecureStorage. |
-| `403` | Akses ditolak. Role tidak memiliki izin / bukan atasan. | Pegawai mengakses endpoint atasan atau memeriksa laporan pegawai lain. | Tampilkan dialog akses ditolak atau batasi navigasi menu berdasarkan `auth.role`. |
-| `404` | Laporan / rincian kegiatan tidak ditemukan. | ID laporan tidak ada dalam database atau bukan milik pelapor. | Refresh daftar riwayat laporan dan tampilkan toast notifikasi error. |
-| `422` | Anda belum memiliki atasan langsung yang terdaftar. | Profil belum memiliki NIP atasan di `ref_pegawai`. | Blokir tombol buat laporan dan tampilkan banner peringatan pembaruan data atasan. |
-| `422` | Laporan kinerja pada tanggal ini sudah pernah dibuat. | Duplikasi penginputan tanggal tugas. | Berikan opsi bagi pengguna untuk membuka laporan yang sudah ada pada tanggal tersebut. |
+| `401` | Akses ditolak. API Key tidak valid. | Header `X-API-KEY` tidak disertakan atau salah. | Periksa konfigurasi API Key pada environment klien. |
+| `401` | Akses ditolak. NIP pegawai wajib disertakan. | Header `X-USER-NIP` kosong atau tidak dikirim. | Pastikan sesi aplikasi menyimpan NIP pegawai yang sedang aktif dan menyertakannya di setiap request. |
+| `404` | Pegawai dengan NIP '...' tidak terdaftar. | NIP tidak ada di database kepegawaian. | Arahkan pengguna memeriksa kembali NIP yang diinput. |
+| `403` | Akses ditolak. Role tidak memiliki izin / bukan atasan. | Pegawai mengakses endpoint atasan atau memeriksa laporan pegawai lain. | Tampilkan dialog akses ditolak atau batasi navigasi menu berdasarkan role. |
+| `422` | Anda belum memiliki atasan langsung yang terdaftar. | Profil belum memiliki NIP atasan di `ref_pegawai`. | Tampilkan peringatan pembaruan data atasan di profil. |
+| `422` | Laporan kinerja pada tanggal ini sudah pernah dibuat. | Duplikasi penginputan tanggal tugas. | Buka laporan yang sudah ada pada tanggal tersebut. |
 | `422` | Laporan yang sudah disetujui (Approved) terkunci permanen. | Percobaan edit/hapus pada status `2`. | Sembunyikan tombol Edit dan Hapus di detail laporan status `2`. |
-| `422` | Laporan belum memiliki rincian kegiatan kerja. | Percobaan submit pada laporan kosong. | Validasi form: minimal 1 kegiatan sebelum mengaktifkan tombol kirim. |
 
 ---
 
 ## 7. AI AGENT TOOL DEFINITIONS (FUNCTION CALLING SPECIFICATION)
 
-Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut deklarasi schema JSON:
+Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut deklarasi schema JSON terkini:
 
 ```json
 [
   {
-    "name": "login_ekinerja",
-    "description": "Otentikasi pengguna e-kinerja dan dapatkan Bearer Token JWT.",
+    "name": "verify_pegawai_nip",
+    "description": "Verifikasi status keaktifan NIP pegawai menggunakan API Key.",
     "parameters": {
       "type": "object",
       "properties": {
-        "username": { "type": "string", "description": "NIP Pegawai 18 digit" },
-        "password": { "type": "string", "description": "Kata sandi akun" }
+        "nip": { "type": "string", "description": "NIP Pegawai 18 digit" }
       },
-      "required": ["username", "password"]
+      "required": ["nip"]
     }
   },
   {
@@ -639,11 +528,13 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip": { "type": "string", "description": "NIP Pegawai pelapor" },
         "bulan": { "type": "integer", "description": "Nomor bulan (1-12)" },
         "tahun": { "type": "integer", "description": "Tahun empat digit (contoh: 2026)" },
         "status": { "type": "integer", "description": "0: Draft, 1: Submitted, 2: Approved, 3: Revision" },
         "page": { "type": "integer", "default": 1 }
-      }
+      },
+      "required": ["nip"]
     }
   },
   {
@@ -652,10 +543,11 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip": { "type": "string", "description": "NIP Pegawai pelapor" },
         "tanggal": { "type": "string", "description": "Format YYYY-MM-DD" },
         "ket": { "type": "string", "default": "0", "description": "Keterangan jenis hari (0 = normal)" }
       },
-      "required": ["tanggal"]
+      "required": ["nip", "tanggal"]
     }
   },
   {
@@ -664,13 +556,14 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip": { "type": "string", "description": "NIP Pegawai pelapor" },
         "id_pro_lap": { "type": "integer", "description": "ID header laporan" },
         "uraian_tugas": { "type": "string", "description": "Deskripsi pekerjaan yang dikerjakan" },
         "jam": { "type": "string", "description": "Waktu kegiatan, contoh: 08:30 - 11:30" },
         "output": { "type": "string", "description": "Output pekerjaan, contoh: 1 Dokumen SOP" },
         "urutan": { "type": "integer", "description": "Urutan aktivitas kerja" }
       },
-      "required": ["id_pro_lap", "uraian_tugas", "jam", "output"]
+      "required": ["nip", "id_pro_lap", "uraian_tugas", "jam", "output"]
     }
   },
   {
@@ -679,9 +572,10 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip": { "type": "string", "description": "NIP Pegawai pelapor" },
         "id_pro_lap": { "type": "integer", "description": "ID header laporan yang akan dikirim" }
       },
-      "required": ["id_pro_lap"]
+      "required": ["nip", "id_pro_lap"]
     }
   },
   {
@@ -690,9 +584,10 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip_atasan": { "type": "string", "description": "NIP Atasan langsung yang sedang login" },
         "id_pro_lap": { "type": "integer", "description": "ID laporan bawahan yang akan direview" }
       },
-      "required": ["id_pro_lap"]
+      "required": ["nip_atasan", "id_pro_lap"]
     }
   },
   {
@@ -701,13 +596,14 @@ Bagi AI Agent yang berinteraksi via LLM Tool Use / Function Calling, berikut dek
     "parameters": {
       "type": "object",
       "properties": {
+        "nip_atasan": { "type": "string", "description": "NIP Atasan yang mengevaluasi" },
         "id_pro_lap": { "type": "integer", "description": "ID laporan yang dievaluasi" },
         "keputusan": { "type": "string", "enum": ["SETUJUI", "REVISI"] },
         "ketepatan_waktu": { "type": "number", "description": "Skor nilai ketepatan waktu (diperlukan jika SETUJUI)" },
         "kesesuaian_lap": { "type": "number", "description": "Skor nilai kesesuaian tupoksi (diperlukan jika SETUJUI)" },
         "note": { "type": "string", "description": "Catatan perbaikan jika keputusan adalah REVISI" }
       },
-      "required": ["id_pro_lap", "keputusan"]
+      "required": ["nip_atasan", "id_pro_lap", "keputusan"]
     }
   }
 ]

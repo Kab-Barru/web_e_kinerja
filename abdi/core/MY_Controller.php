@@ -11,12 +11,12 @@ class MY_Controller extends CI_Controller
 
 /**
  * Base API Controller for E-Kinerja RESTful API v1
- * Provides standardized JSON envelopes, JWT authentication, and request handling.
+ * Provides standardized JSON envelopes, API Key + NIP authentication, and request handling.
  */
 class MY_ApiController extends MY_Controller
 {
     /**
-     * @var object|null Authenticated user data from JWT
+     * @var object|null Authenticated user data resolved from NIP / Token
      */
     protected $auth_user = null;
 
@@ -24,6 +24,8 @@ class MY_ApiController extends MY_Controller
     {
         parent::__construct();
         $this->load->library('JWT');
+        $this->load->model('api/Pegawai_model', 'pegawai_model');
+        $this->config->load('api_key', TRUE, TRUE);
 
         // Handle CORS Preflight & Headers
         $this->handle_cors();
@@ -36,7 +38,7 @@ class MY_ApiController extends MY_Controller
     {
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-        header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-Requested-With");
+        header("Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-Requested-With, X-API-KEY, X-USER-NIP, X-NIP");
 
         if ($this->input->method() === 'options') {
             header("HTTP/1.1 200 OK");
@@ -45,30 +47,127 @@ class MY_ApiController extends MY_Controller
     }
 
     /**
-     * Require JWT Authentication
-     * Populates $this->auth_user or terminates with 401 Unauthorized
+     * Require Authentication via Header X-API-KEY & X-USER-NIP (or fallback Bearer JWT)
+     * Populates $this->auth_user or terminates with 401/404
      *
-     * @return object Decoded token payload
+     * @return object Decoded user data
      */
     protected function require_auth()
     {
+        // 1. Cek autentikasi via Header X-API-KEY & X-USER-NIP (Utama)
+        $api_key = $this->get_api_key();
+        $user_nip = $this->get_user_nip();
+
+        if (!empty($api_key)) {
+            if (!$this->is_valid_api_key($api_key)) {
+                $this->respond_error('Akses ditolak. API Key yang disertakan pada header X-API-KEY tidak valid.', [
+                    'api_key' => 'Nilai X-API-KEY tidak cocok dengan daftar kunci yang diizinkan.'
+                ], 401);
+            }
+
+            if (empty($user_nip)) {
+                $this->respond_error('Akses ditolak. NIP pegawai wajib disertakan pada header X-USER-NIP.', [
+                    'nip' => 'Header X-USER-NIP tidak ditemukan.'
+                ], 401);
+            }
+
+            $pegawai = $this->pegawai_model->get_profile_by_nik($user_nip);
+            if (!$pegawai) {
+                $this->respond_error("Akses ditolak. Pegawai dengan NIP '$user_nip' tidak terdaftar di sistem e-Kinerja.", [
+                    'nip' => 'NIP tidak ditemukan dalam database ref_pegawai.'
+                ], 404);
+            }
+
+            $log_user = $this->pegawai_model->get_log_account($user_nip);
+            $role = ($log_user && !empty($log_user->lev)) ? $log_user->lev : 'user_pegawai';
+
+            $this->auth_user = (object)[
+                'sub'           => $pegawai->nik,
+                'nik'           => $pegawai->nik,
+                'nama'          => $pegawai->nama,
+                'lev'           => $role,
+                'id_unit_kerja' => $pegawai->id_unit_kerja,
+                'id_jabatan'    => $pegawai->id_jabatan,
+                'nik_atasan'    => $pegawai->nik_atasan,
+                'id_adm'        => $log_user ? $log_user->id_adm : null,
+            ];
+
+            return $this->auth_user;
+        }
+
+        // 2. Fallback: Autentikasi via Bearer JWT (Kompatibilitas)
         $token = $this->get_bearer_token();
-
-        if (empty($token)) {
-            $this->respond_error('Akses ditolak. Token otentikasi Bearer tidak ditemukan.', [
-                'authorization' => 'Header Authorization: Bearer <token> wajib disertakan.'
-            ], 401);
+        if (!empty($token)) {
+            try {
+                $decoded = $this->jwt->decode($token);
+                $this->auth_user = $decoded;
+                return $decoded;
+            } catch (Exception $e) {
+                $this->respond_error($e->getMessage(), [
+                    'token' => 'Token tidak valid atau telah kedaluwarsa.'
+                ], 401);
+            }
         }
 
-        try {
-            $decoded = $this->jwt->decode($token);
-            $this->auth_user = $decoded;
-            return $decoded;
-        } catch (Exception $e) {
-            $this->respond_error($e->getMessage(), [
-                'token' => 'Token tidak valid atau telah kedaluwarsa.'
-            ], 401);
+        // Jika keduanya tidak disertakan
+        $this->respond_error('Akses ditolak. Harap sertakan header X-API-KEY dan X-USER-NIP.', [
+            'authentication' => 'Header X-API-KEY dan X-USER-NIP wajib disertakan pada setiap request.'
+        ], 401);
+    }
+
+    /**
+     * Extract API Key from HTTP headers
+     *
+     * @return string|null
+     */
+    protected function get_api_key()
+    {
+        $key = $this->input->get_request_header('X-API-KEY', TRUE);
+        if (empty($key)) {
+            $key = $this->input->get_request_header('X-Api-Key', TRUE);
         }
+        if (empty($key) && isset($_SERVER['HTTP_X_API_KEY'])) {
+            $key = $_SERVER['HTTP_X_API_KEY'];
+        }
+        return $key ? trim($key) : null;
+    }
+
+    /**
+     * Validate API Key against configured keys
+     *
+     * @param string $key
+     * @return bool
+     */
+    protected function is_valid_api_key($key)
+    {
+        $valid_keys = $this->config->item('api_keys', 'api_key');
+        if (!is_array($valid_keys)) {
+            return false;
+        }
+        return in_array($key, $valid_keys, true);
+    }
+
+    /**
+     * Extract User NIP from HTTP headers
+     *
+     * @return string|null
+     */
+    protected function get_user_nip()
+    {
+        $nip = $this->input->get_request_header('X-USER-NIP', TRUE);
+        if (empty($nip)) {
+            $nip = $this->input->get_request_header('X-User-Nip', TRUE);
+        }
+        if (empty($nip)) {
+            $nip = $this->input->get_request_header('X-NIP', TRUE);
+        }
+        if (empty($nip) && isset($_SERVER['HTTP_X_USER_NIP'])) {
+            $nip = $_SERVER['HTTP_X_USER_NIP'];
+        }
+        if (empty($nip) && isset($_SERVER['HTTP_X_NIP'])) {
+            $nip = $_SERVER['HTTP_X_NIP'];
+        }
+        return $nip ? trim($nip) : null;
     }
 
     /**
@@ -93,7 +192,7 @@ class MY_ApiController extends MY_Controller
     }
 
     /**
-     * Extract Bearer token from HTTP headers
+     * Extract Bearer token from HTTP headers (Fallback)
      *
      * @return string|null
      */
