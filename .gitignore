@@ -1,0 +1,85 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# IDE & Editor Files
+.idea/
+.vscode/
+/nbproject/
+*.sublime-workspace
+*.sublime-project
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# Logs & Temporary Files
+error_log
+*.log
+tmp/*
+!tmp/.gitkeep
+yusran/ftp_tmp/*
+!yusran/ftp_tmp/index.html
+
+# CodeIgniter Cache & Logs
+application/cache/*
+!application/cache/index.html
+application/logs/*
+!application/logs/index.html
+!application/*/.htaccess
+
+yuzz/cache/*
+!yuzz/cache/index.html
+yuzz/logs/*
+!yuzz/logs/index.html
+
+ari/cache/*
+!ari/cache/index.html
+ari/logs/*
+!ari/logs/index.html
+
+# Backup & Temporary Files
+*.bak
+*.save
+*.save.*
+*~
+*.swp
+.htaccess.save*
+.htaccesse.bak
+
+# Heavy Assets & Dynamic Uploads
+# -----------------------------------
+# User uploads directory (~77MB dynamic images and qr codes)
+uploads/*
+!uploads/.gitkeep
+!uploads/index.html
+!uploads/qr_image/
+uploads/qr_image/*
+!uploads/qr_image/.gitkeep
+
+# JavaScript & CSS Source Maps (~40MB debugging maps)
+*.map
+
+# Redundant duplicate asset folders (~46MB duplicate in ari/plugins, ~13MB in dist/asset)
+ari/plugins/
+dist/asset/
+
+# Heavy archives & compressed files
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Composer & Tests
+composer.lock
+/vendor/
+user_guide_src/build/*
+user_guide_src/cilexer/build/*
+user_guide_src/cilexer/dist/*
+user_guide_src/cilexer/pycilexer.egg-info/*
+/tests/tests/
+/tests/results/
+
