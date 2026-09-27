@@ -1,0 +1,427 @@
+{
+  "info": {
+    "_postman_id": "e-kinerja-barrukab-v1",
+    "name": "E-Kinerja Kabupaten Barru - RESTful API v1",
+    "description": "Koleksi Postman resmi untuk API e-Kinerja Kabupaten Barru.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://e-kinerja.barrukab.go.id/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "bearer_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "id_pro_lap",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "id_pro_lap_detil",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autentikasi & Akun",
+      "item": [
+        {
+          "name": "POST Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
+                  "    pm.collectionVariables.set('bearer_token', jsonData.data.token);",
+                  "    console.log('Bearer token saved to collection variable');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"198801012015011001\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "GET Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/profile",
+              "host": ["{{base_url}}"],
+              "path": ["profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Kinerja Harian Pegawai",
+      "item": [
+        {
+          "name": "GET Daftar Kinerja",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/kinerja?bulan=9&tahun=2026&page=1&per_page=15",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja"],
+              "query": [
+                { "key": "bulan", "value": "9" },
+                { "key": "tahun", "value": "2026" },
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "15" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Buat Draft Laporan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.id_pro_lap) {",
+                  "    pm.collectionVariables.set('id_pro_lap', jsonData.data.id_pro_lap);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tanggal\": \"2026-09-27\",\n  \"ket\": \"0\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/kinerja",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja"]
+            }
+          }
+        },
+        {
+          "name": "GET Detail Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/kinerja/{{id_pro_lap}}",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "{{id_pro_lap}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT Ubah Header Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ket\": \"0\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/kinerja/{{id_pro_lap}}",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "{{id_pro_lap}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Hapus Draft Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/kinerja/{{id_pro_lap}}",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "{{id_pro_lap}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Tambah Item Kegiatan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.id_pro_lap_detil) {",
+                  "    pm.collectionVariables.set('id_pro_lap_detil', jsonData.data.id_pro_lap_detil);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uraian_tugas\": \"Penyusunan draft telaahan staf evaluasi TPP\",\n  \"jam\": \"08:30 - 11:30\",\n  \"output\": \"1 Berkas Draft Telaahan\",\n  \"urutan\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/kinerja/{{id_pro_lap}}/items",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "{{id_pro_lap}}", "items"]
+            }
+          }
+        },
+        {
+          "name": "PUT Ubah Item Kegiatan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uraian_tugas\": \"Revisi penyusunan draft telaahan staf evaluasi TPP\",\n  \"jam\": \"08:30 - 12:00\",\n  \"output\": \"1 Berkas Final Telaahan\",\n  \"urutan\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/kinerja/items/{{id_pro_lap_detil}}",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "items", "{{id_pro_lap_detil}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Hapus Item Kegiatan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/kinerja/items/{{id_pro_lap_detil}}",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "items", "{{id_pro_lap_detil}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Submit Laporan ke Atasan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/kinerja/{{id_pro_lap}}/submit",
+              "host": ["{{base_url}}"],
+              "path": ["kinerja", "{{id_pro_lap}}", "submit"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Approval & Evaluasi Atasan",
+      "item": [
+        {
+          "name": "GET Daftar Bawahan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/approval/bawahan",
+              "host": ["{{base_url}}"],
+              "path": ["approval", "bawahan"]
+            }
+          }
+        },
+        {
+          "name": "GET Laporan Pending",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/approval/pending?page=1&per_page=15",
+              "host": ["{{base_url}}"],
+              "path": ["approval", "pending"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "15" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Review Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/approval/{{id_pro_lap}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["approval", "{{id_pro_lap}}", "review"]
+            }
+          }
+        },
+        {
+          "name": "POST Setujui Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keputusan\": \"SETUJUI\",\n  \"ketepatan_waktu\": 50,\n  \"kesesuaian_lap\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/approval/{{id_pro_lap}}/decide",
+              "host": ["{{base_url}}"],
+              "path": ["approval", "{{id_pro_lap}}", "decide"]
+            }
+          }
+        },
+        {
+          "name": "POST Revisi Laporan",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keputusan\": \"REVISI\",\n  \"note\": \"Uraian kegiatan jam 08:30 belum menyertakan file draft dokumen lampiran.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/approval/{{id_pro_lap}}/decide",
+              "host": ["{{base_url}}"],
+              "path": ["approval", "{{id_pro_lap}}", "decide"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Master Data & Integrasi",
+      "item": [
+        {
+          "name": "GET Skor Penilaian",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/master/skor-penilaian",
+              "host": ["{{base_url}}"],
+              "path": ["master", "skor-penilaian"]
+            }
+          }
+        },
+        {
+          "name": "POST Sinkronisasi Fingerprint",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nik\": \"198801012015011001\",\n  \"tanggal\": \"2026-09-27\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/integrasi/fingerprint/sync-daily",
+              "host": ["{{base_url}}"],
+              "path": ["integrasi", "fingerprint", "sync-daily"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

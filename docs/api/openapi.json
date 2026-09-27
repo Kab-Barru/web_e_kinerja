@@ -1,0 +1,357 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "E-Kinerja Kabupaten Barru RESTful API",
+    "description": "Spesifikasi RESTful API resmi Sistem Informasi E-Kinerja Pemerintah Kabupaten Barru untuk integrasi Frontend, Mobile, dan AI Agent.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "BKPSDM Pemerintah Kabupaten Barru",
+      "url": "https://e-kinerja.barrukab.go.id"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://e-kinerja.barrukab.go.id/api/v1",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost/e-kinerja/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Kirimkan JWT Token dalam format header 'Authorization: Bearer <token>'"
+      }
+    },
+    "schemas": {
+      "SuccessEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Operasi berhasil dijalankan" },
+          "data": { "type": "object", "nullable": true },
+          "meta": { "type": "object", "nullable": true }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string", "example": "Pesan deskripsi kesalahan" },
+          "errors": { "type": "object", "nullable": true },
+          "code": { "type": "integer", "example": 422 }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "current_page": { "type": "integer", "example": 1 },
+          "per_page": { "type": "integer", "example": 15 },
+          "total_items": { "type": "integer", "example": 45 },
+          "total_pages": { "type": "integer", "example": 3 },
+          "has_next": { "type": "boolean", "example": true },
+          "has_prev": { "type": "boolean", "example": false }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "198801012015011001", "description": "NIP Pegawai" },
+          "password": { "type": "string", "example": "password123", "description": "Password Akun" }
+        }
+      },
+      "CreateReportRequest": {
+        "type": "object",
+        "required": ["tanggal"],
+        "properties": {
+          "tanggal": { "type": "string", "format": "date", "example": "2026-09-27" },
+          "ket": { "type": "string", "default": "0", "example": "0", "description": "0 = hari kerja normal" }
+        }
+      },
+      "UpdateReportRequest": {
+        "type": "object",
+        "properties": {
+          "ket": { "type": "string", "example": "0" }
+        }
+      },
+      "CreateItemRequest": {
+        "type": "object",
+        "required": ["uraian_tugas", "jam", "output"],
+        "properties": {
+          "uraian_tugas": { "type": "string", "example": "Penyusunan draft telaahan staf evaluasi TPP" },
+          "jam": { "type": "string", "example": "08:30 - 11:30" },
+          "output": { "type": "string", "example": "1 Berkas Draft Telaahan" },
+          "urutan": { "type": "integer", "example": 2 }
+        }
+      },
+      "DecideReportRequest": {
+        "type": "object",
+        "required": ["keputusan"],
+        "properties": {
+          "keputusan": { "type": "string", "enum": ["SETUJUI", "REVISI"], "example": "SETUJUI" },
+          "ketepatan_waktu": { "type": "number", "example": 50, "description": "Wajib jika keputusan = SETUJUI" },
+          "kesesuaian_lap": { "type": "number", "example": 50, "description": "Wajib jika keputusan = SETUJUI" },
+          "note": { "type": "string", "example": "Lengkapi rincian bukti dukung", "description": "Wajib jika keputusan = REVISI" }
+        }
+      },
+      "SyncDailyRequest": {
+        "type": "object",
+        "required": ["nik", "tanggal"],
+        "properties": {
+          "nik": { "type": "string", "example": "198801012015011001" },
+          "tanggal": { "type": "string", "format": "date", "example": "2026-09-27" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Login Pengguna & Dapatkan Bearer Token JWT",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login berhasil, mengembalikan token JWT dan profil singkat" },
+          "401": { "description": "Kombinasi NIP / password salah" },
+          "422": { "description": "Parameter tidak lengkap" }
+        }
+      }
+    },
+    "/profile": {
+      "get": {
+        "summary": "Ambil Profil Lengkap Pengguna yang Sedang Login",
+        "responses": {
+          "200": { "description": "Profil pegawai, unit kerja, jabatan, dan atasan langsung" },
+          "401": { "description": "Token tidak valid atau kedaluwarsa" }
+        }
+      }
+    },
+    "/kinerja": {
+      "get": {
+        "summary": "Daftar Riwayat Laporan Kinerja Bulanan Pegawai",
+        "parameters": [
+          { "name": "bulan", "in": "query", "schema": { "type": "integer" } },
+          { "name": "tahun", "in": "query", "schema": { "type": "integer" } },
+          { "name": "status", "in": "query", "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 15 } }
+        ],
+        "responses": {
+          "200": { "description": "Daftar laporan terpaginasi" }
+        }
+      },
+      "post": {
+        "summary": "Buat Header Draft Laporan Harian Baru",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Draft laporan berhasil dibuat" },
+          "422": { "description": "Belum memiliki atasan atau tanggal duplikat" }
+        }
+      }
+    },
+    "/kinerja/{id_pro_lap}": {
+      "get": {
+        "summary": "Detail Laporan Kinerja Beserta Rincian Item Kegiatan",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Detail laporan dan array kegiatan" },
+          "404": { "description": "Laporan tidak ditemukan" }
+        }
+      },
+      "put": {
+        "summary": "Ubah Keterangan Header Laporan (Hanya Status Draft / Revisi)",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Laporan berhasil diperbarui" },
+          "422": { "description": "Status tidak mengizinkan pengubahan" }
+        }
+      },
+      "delete": {
+        "summary": "Hapus Draft Laporan Beserta Seluruh Kegiatan Terkait",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Draft laporan berhasil dihapus" },
+          "422": { "description": "Laporan bukan berstatus Draft" }
+        }
+      }
+    },
+    "/kinerja/{id_pro_lap}/items": {
+      "post": {
+        "summary": "Tambah Rincian Kegiatan Baru ke Laporan",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateItemRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Kegiatan berhasil ditambahkan" },
+          "422": { "description": "Laporan sudah diajukan / disetujui" }
+        }
+      }
+    },
+    "/kinerja/items/{id_pro_lap_detil}": {
+      "put": {
+        "summary": "Perbarui Rincian Kegiatan",
+        "parameters": [
+          { "name": "id_pro_lap_detil", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateItemRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Kegiatan berhasil diperbarui" }
+        }
+      },
+      "delete": {
+        "summary": "Hapus Rincian Kegiatan",
+        "parameters": [
+          { "name": "id_pro_lap_detil", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Kegiatan berhasil dihapus" }
+        }
+      }
+    },
+    "/kinerja/{id_pro_lap}/submit": {
+      "post": {
+        "summary": "Ajukan Laporan Kinerja ke Atasan Langsung",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Laporan berhasil disubmit ke atasan" },
+          "422": { "description": "Laporan belum memiliki kegiatan atau bukan draft/revisi" }
+        }
+      }
+    },
+    "/approval/bawahan": {
+      "get": {
+        "summary": "Daftar Bawahan Langsung dari Atasan yang Sedang Login",
+        "responses": {
+          "200": { "description": "Daftar NIP, nama, jabatan, unit kerja bawahan" }
+        }
+      }
+    },
+    "/approval/pending": {
+      "get": {
+        "summary": "Daftar Laporan Menunggu Evaluasi Atasan (Status Submitted)",
+        "parameters": [
+          { "name": "nik_bawahan", "in": "query", "schema": { "type": "string" } },
+          { "name": "bulan", "in": "query", "schema": { "type": "integer" } },
+          { "name": "tahun", "in": "query", "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 15 } }
+        ],
+        "responses": {
+          "200": { "description": "Daftar laporan pending bawahan" }
+        }
+      }
+    },
+    "/approval/{id_pro_lap}/review": {
+      "get": {
+        "summary": "Data Lengkap Evaluasi Laporan Bawahan (Termasuk Toleransi Kepatuhan & Izin)",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Review data komprehensif untuk atasan" },
+          "404": { "description": "Bukan laporan bawahan langsung Anda" }
+        }
+      }
+    },
+    "/approval/{id_pro_lap}/decide": {
+      "post": {
+        "summary": "Kirim Putusan Evaluasi Atasan (SETUJUI atau REVISI)",
+        "parameters": [
+          { "name": "id_pro_lap", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DecideReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Keputusan berhasil disimpan" },
+          "422": { "description": "Input penilaian tidak valid" }
+        }
+      }
+    },
+    "/master/skor-penilaian": {
+      "get": {
+        "summary": "Daftar Opsi Standar Skor Penilaian Atasan",
+        "responses": {
+          "200": { "description": "Master opsi ketepatan waktu dan kesesuaian laporan" }
+        }
+      }
+    },
+    "/integrasi/fingerprint/sync-daily": {
+      "post": {
+        "summary": "Sinkronisasi Presensi Fingerprint Harian ke Laporan Kinerja",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SyncDailyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Proses sinkronisasi presensi selesai" }
+        }
+      }
+    }
+  }
+}
